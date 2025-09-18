@@ -1,4 +1,4 @@
-name: "🚀 DevOps Demo • CI/CD"
+name: "DevOps Marcel CI/CD"
 
 on:
   push:
@@ -147,42 +147,42 @@ jobs:
           name: ${{ env.PROJECT_NAME }}-build-${{ github.run_number }}
           path: ${{ env.DIST_DIR }}/
 
-      - name: "🔎 Verificação pós-download"
+      - name: "Verificação pós-download"
         shell: bash
         run: |
           set -euo pipefail
           ls -la "${{ env.DIST_DIR }}"
-          echo "📄 build-info.json:"
+          echo " build-info.json:"
           cat "${{ env.DIST_DIR }}/build-info.json"
 
-      - name: "🚀 Deploy de produção (demo)"
+      - name: "Deploy de produção (demo)"
         id: deploy
         shell: bash
         run: |
           set -euo pipefail
-          echo "🔧 Preparando ambiente..."
+          echo " Preparando ambiente..."
           export DEPLOY_ENV=production
           export APP_NAME="${{ env.PROJECT_NAME }}"
 
-          echo "📤 Enviando arquivos (simulado)..."
+          echo " Enviando arquivos (simulado)..."
           count=$(find "${{ env.DIST_DIR }}" -type f | wc -l)
           for i in $(seq 1 "$count"); do
-            echo "⬆️  Upload $i/$count"
+            echo "  Upload $i/$count"
             sleep 0.2
           done
 
-          echo "🔄 Configuração do servidor (simulada)..."
+          echo " Configuração do servidor (simulada)..."
           echo "  - Limpando cache"
           echo "  - Atualizando Nginx"
           echo "  - Reiniciando serviços"
 
-          echo "🏥 Health check..."
+          echo " Health check..."
           sleep 1
-          echo "✅ OK"
+          echo " DEU BOA"
 
           URL="https://${{ env.PROJECT_NAME }}.exemplo.com"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
-          echo "✅ Deploy finalizado"
+          echo " Deploy finalizado :)"
 
       - name: "🧾 Resumo do deploy"
         shell: bash
@@ -192,33 +192,33 @@ jobs:
           - **Ambiente:** Produção
           - **Commit:** \`${{ github.sha }}\`
           - **URL:** ${{ steps.deploy.outputs.url }}
-          - **Status:** ✅ Sucesso
+          - **Status:** Sucesso
           EOF
 
   post-deploy-tests:
-    name: "🧪 Pós-Deploy"
+    name: " Pós-Deploy"
     runs-on: ubuntu-latest
     needs: deploy
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
-      - name: "🔥 Smoke tests"
+      - name:  Smoke tests"
         shell: bash
         run: |
           set -euo pipefail
-          echo "🔌 Conectividade... ✅"
-          echo "⏱️ Response time... 45ms ✅"
-          echo "📡 Status HTTP... 200 ✅"
-          echo "🧩 Validação de conteúdo... ✅"
-          echo "🎉 Smoke tests aprovados"
+          echo " Conectividade... "
+          echo " Response time... 45ms "
+          echo " Status HTTP... 200 "
+          echo " Validação de conteúdo..."
+          echo " Smoke tests aprovados"
 
-      - name: "📊 Relatório final"
+      - name: "Relatório final do CI/CD"
         shell: bash
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<EOF
           # 📊 Relatório Final do Pipeline
-          - **Build:** ✅
-          - **Testes:** ✅
-          - **Deploy:** ✅
+          - **Build:** 
+          - **Testes:** 
+          - **Deploy:** 
           - **URL:** https://${{ env.PROJECT_NAME }}.exemplo.com
           EOF
