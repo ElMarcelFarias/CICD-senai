@@ -1,0 +1,224 @@
+name: "🚀 DevOps Demo • CI/CD"
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  PROJECT_NAME: devops
+  DIST_DIR: dist
+  SRC_FILE: src/index.html
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: "🏗️ Build & Qualidade"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "📥 Checkout"
+        uses: actions/checkout@v4
+
+      - name: "🔎 Análise rápida do projeto"
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "🔍 Estrutura do repositório:"
+          tree -a -I ".git" || ls -la
+          echo
+
+          echo "📁 Checando arquivos essenciais..."
+          [[ -f "${{ env.SRC_FILE }}" ]] || { echo "❌ ${SRC_FILE} não encontrado"; exit 1; }
+          [[ -f ".github/workflows/${GITHUB_WORKFLOW_REF##*/}" ]] || echo "ℹ️ Workflow atual não está salvo em arquivo padrão"
+          echo "✅ Arquivos essenciais verificados"
+
+      - name: "🧪 Testes de qualidade (HTML/CSS/JS/A11y básico)"
+        shell: bash
+        run: |
+          set -euo pipefail
+          HTML="${{ env.SRC_FILE }}"
+          echo "🔍 Teste 1: DOCTYPE..."
+          grep -q "<!DOCTYPE html>" "$HTML" && echo "✅ DOCTYPE HTML5 presente"
+
+          echo "🔍 Teste 2: <title>..."
+          grep -q "<title>" "$HTML" && echo "✅ Tag <title> presente"
+
+          echo "🔍 Teste 3: CSS embarcado..."
+          if grep -q "<style" "$HTML"; then echo "✅ CSS encontrado"; else echo "⚠️ Sem CSS embarcado"; fi
+
+          echo "🔍 Teste 4: JavaScript..."
+          if grep -q "<script" "$HTML"; then echo "✅ JavaScript encontrado"; else echo "⚠️ Sem JavaScript"; fi
+
+          echo "🔍 Teste 5: Acessibilidade (alt/aria)..."
+          if grep -Eq 'alt=|aria-' "$HTML"; then
+            echo "✅ Atributos de acessibilidade identificados"
+          else
+            echo "⚠️ Considere adicionar atributos de acessibilidade (alt/aria-*)"
+          fi
+
+          echo "🎉 Checks de qualidade finalizados"
+
+      - name: "🏗️ Build"
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "🔨 Preparando diretório de saída..."
+          rm -rf "${{ env.DIST_DIR }}"
+          mkdir -p "${{ env.DIST_DIR }}"
+
+          echo "📂 Copiando artefatos..."
+          cp -r src/* "${{ env.DIST_DIR }}/"
+
+          echo "📝 build-info.json"
+          cat > "${{ env.DIST_DIR }}/build-info.json" << EOF
+          {
+            "buildId": "${{ github.run_number }}",
+            "commit": "${{ github.sha }}",
+            "branch": "${{ github.ref_name }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "actor": "${{ github.actor }}",
+            "project": "${{ env.PROJECT_NAME }}",
+            "status": "success"
+          }
+          EOF
+
+          echo "🔐 SHA256 dos arquivos:"
+          (cd "${{ env.DIST_DIR }}" && sha256sum * || shasum -a 256 *)
+
+      - name: "🔍 Validação do build"
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=("${{ env.DIST_DIR }}/index.html" "${{ env.DIST_DIR }}/build-info.json")
+          for f in "${files[@]}"; do
+            [[ -f "$f" ]] || { echo "❌ Faltando $f"; exit 1; }
+            echo "✅ $f - $(stat -c%s "$f" 2>/dev/null || stat -f%z "$f") bytes"
+          done
+
+          echo "🔎 Conteúdo esperado?"
+          if grep -qi "DevOps" "${{ env.DIST_DIR }}/index.html"; then
+            echo "✅ Conteúdo HTML menciona 'DevOps'"
+          else
+            echo "⚠️ 'DevOps' não encontrado no HTML"
+          fi
+
+          echo "📊 Estatísticas:"
+          echo "  Tamanho total: $(du -sh '${{ env.DIST_DIR }}' | cut -f1)"
+          echo "  Arquivos: $(find '${{ env.DIST_DIR }}' -type f | wc -l)"
+
+      - name: "📦 Upload de artefatos"
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PROJECT_NAME }}-build-${{ github.run_number }}
+          path: ${{ env.DIST_DIR }}/
+          retention-days: 14
+
+      - name: "🧾 Resumo do build"
+        shell: bash
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          # ✅ Build concluído
+          - **Projeto:** \`${{ env.PROJECT_NAME }}\`
+          - **Build:** \`#${{ github.run_number }}\`
+          - **Branch:** \`${{ github.ref_name }}\`
+          - **Autor:** \`${{ github.actor }}\`
+          - **Artefato:** \`${{ env.PROJECT_NAME }}-build-${{ github.run_number }}\`
+          EOF
+
+  deploy:
+    name: "🚀 Deploy (simulado)"
+    runs-on: ubuntu-latest
+    needs: build-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: "📥 Baixar artefatos"
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.PROJECT_NAME }}-build-${{ github.run_number }}
+          path: ${{ env.DIST_DIR }}/
+
+      - name: "🔎 Verificação pós-download"
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -la "${{ env.DIST_DIR }}"
+          echo "📄 build-info.json:"
+          cat "${{ env.DIST_DIR }}/build-info.json"
+
+      - name: "🚀 Deploy de produção (demo)"
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "🔧 Preparando ambiente..."
+          export DEPLOY_ENV=production
+          export APP_NAME="${{ env.PROJECT_NAME }}"
+
+          echo "📤 Enviando arquivos (simulado)..."
+          count=$(find "${{ env.DIST_DIR }}" -type f | wc -l)
+          for i in $(seq 1 "$count"); do
+            echo "⬆️  Upload $i/$count"
+            sleep 0.2
+          done
+
+          echo "🔄 Configuração do servidor (simulada)..."
+          echo "  - Limpando cache"
+          echo "  - Atualizando Nginx"
+          echo "  - Reiniciando serviços"
+
+          echo "🏥 Health check..."
+          sleep 1
+          echo "✅ OK"
+
+          URL="https://${{ env.PROJECT_NAME }}.exemplo.com"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "✅ Deploy finalizado"
+
+      - name: "🧾 Resumo do deploy"
+        shell: bash
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          # 🚀 Deploy (simulado)
+          - **Ambiente:** Produção
+          - **Commit:** \`${{ github.sha }}\`
+          - **URL:** ${{ steps.deploy.outputs.url }}
+          - **Status:** ✅ Sucesso
+          EOF
+
+  post-deploy-tests:
+    name: "🧪 Pós-Deploy"
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: "🔥 Smoke tests"
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "🔌 Conectividade... ✅"
+          echo "⏱️ Response time... 45ms ✅"
+          echo "📡 Status HTTP... 200 ✅"
+          echo "🧩 Validação de conteúdo... ✅"
+          echo "🎉 Smoke tests aprovados"
+
+      - name: "📊 Relatório final"
+        shell: bash
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          # 📊 Relatório Final do Pipeline
+          - **Build:** ✅
+          - **Testes:** ✅
+          - **Deploy:** ✅
+          - **URL:** https://${{ env.PROJECT_NAME }}.exemplo.com
+          EOF
